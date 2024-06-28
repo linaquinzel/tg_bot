@@ -1,0 +1,90 @@
+
+services:
+  bot:
+    env_file: ".env"
+    container_name: bot
+    build: .
+    restart: always  
+    depends_on:
+      - redis
+    ports:
+      - 6379
+      - 1883
+      - 9001
+    networks:
+      - default
+  redis:
+    image: redis
+    container_name: redis_container
+    ports:
+      - 6379
+    volumes:
+      - ./redisdata:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    command: >
+      sh -c '
+        redis-server
+      '
+    networks:
+      - default
+  mosquitto:
+    image: eclipse-mosquitto
+    container_name: mqtt_container
+    ports:
+      - 1883
+      - 8883
+      - 9001
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - mosquitto
+    command: >
+      sh -c '
+        mosquitto -c /mosquitto/config/mosquitto.conf
+      '
+  publisher:
+    env_file: ".env"
+    container_name: publisher
+    build: .
+    command: python mqtt.py
+    restart: always
+    depends_on:
+      - mosquitto
+    networks:
+      - mosquitto
+    ports:
+      - 1883
+      - 8883
+      - 9001
+  subscriber:
+    env_file: ".env"
+    container_name: subscriber
+    build: .
+    command: python subscriber.py
+    restart: always  
+    depends_on:
+      - redis
+      - mosquitto
+    ports:
+      - 6379
+      - 1883
+      - 8883
+      - 9001
+    networks:
+      - default
+      - mosquitto
+networks:
+  default: {}
+  mosquitto:
+    name: mosquitto
+    driver: bridge
+    
